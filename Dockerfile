@@ -34,4 +34,4 @@ EXPOSE 5000
 # Start Xvfb (Virtual Screen) aur Gunicorn server
 CMD Xvfb :99 -screen 0 1920x1080x24 & \
     export DISPLAY=:99 && \
-    gunicorn -w 1 -b 0.0.0.0:5000 app:app
+    gunicorn -w 1 --timeout 120 -b 0.0.0.0:5000 app:app

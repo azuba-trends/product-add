@@ -135,11 +135,21 @@ async function handleFetch() {
       method: "POST",
       headers: { 
           "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "any_value" // <--- YEH LINE ADD KARO
+          "ngrok-skip-browser-warning": "any_value" 
       },
       body: JSON.stringify({ url }),
     });
-    const json = await res.json();
+    
+    // NAYA CODE: Directly json parse karne ki jagah pehle text read karo
+    const responseText = await res.text();
+    let json;
+    try {
+        json = JSON.parse(responseText);
+    } catch (parseError) {
+        // Agar response HTML/Text aaya (e.g. Render 502 Bad Gateway)
+        console.error("Raw Server Response:", responseText);
+        throw new Error("API ne JSON ke bajaye HTML/Error return kiya. Server crash ya timeout ho gaya (Check Render Logs).");
+    }
 
     if (!json.ok) {
       setStatus(json.error || "Kuch gadbad ho gayi.", "error");
@@ -149,7 +159,7 @@ async function handleFetch() {
     setStatus("Fetch ho gaya!", "success");
     renderResult(json.data);
   } catch (err) {
-    setStatus("Server se connect nahi ho paya: " + err.message, "error");
+    setStatus("Server issue: " + err.message, "error");
   } finally {
     fetchBtn.disabled = false;
   }
