@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8" />
+<title>Product Data Fetcher</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div class="layout">
+    <!-- LEFT PANEL -->
+    <aside class="left-panel">
+      <h1>Product Fetcher</h1>
+      <p class="hint">Link daalo, Fetch dabao, right side pe data aayega.</p>
+
+      <label for="url-input">Product URL</label>
+      <input type="text" id="url-input" placeholder="https://www.meesho.com/..." />
+
+      <button id="fetch-btn">Fetch Data</button>
+      
+      <!-- NEW BUTTON -->
+      <button id="pincode-btn" class="secondary-btn hidden">Check Pincodes (Bulk)</button>
+
+      <div id="status"></div>
+    </aside>
+
+    <!-- RIGHT PANEL -->
+    <main class="right-panel">
+      <div id="result-empty">Yahan result dikhega jab tak koi URL fetch nahi hota.</div>
+      <div id="result-content" class="hidden"></div>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
