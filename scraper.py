@@ -38,10 +38,6 @@ def fetch_page_html(url: str, timeout: int = 15) -> str:
 
 
 def fetch_page_html_browser(url: str, wait_seconds: float = 8.0) -> str:
-    """
-    Real Chrome browser se page kholta hai. Colab environment (Linux) ke
-    liye explicitly binary path aur sandbox flags diye gaye hain.
-    """
     import undetected_chromedriver as uc
     import time
 
@@ -49,19 +45,18 @@ def fetch_page_html_browser(url: str, wait_seconds: float = 8.0) -> str:
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-blink-features=AutomationControlled")
     
-    # Linux/Colab specific safety flags
+    # Docker/Linux specific safety flags
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
-    # FIX: Explicitly Colab ka Chromium path do aur auto-versioning on rakho
+    # FIX: Render (Docker) mein install hue official Chrome ka path
     driver = uc.Chrome(
         options=options, 
-        browser_executable_path='/usr/bin/chromium-browser'
+        browser_executable_path='/usr/bin/google-chrome'
     )
     
     try:
         driver.get(url)
-        # WAF challenge (Akamai) ko execute hone ka time do
         time.sleep(wait_seconds) 
         html = driver.page_source
     finally:
@@ -275,69 +270,58 @@ def check_pincodes_bulk(url: str, pincodes: list) -> dict:
     import undetected_chromedriver as uc
     import os
     import time
-    import re
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-
+    
     profile_path = os.path.abspath(os.path.join(os.getcwd(), "chrome_profile"))
-
+    
     options = uc.ChromeOptions()
     options.add_argument("--window-size=1920,1080")
     options.add_argument(f"--user-data-dir={profile_path}")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    
+    # Docker/Linux specific safety flags
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-    driver = uc.Chrome(options=options, version_main=150)
+    # FIX: Render (Docker) mein install hue official Chrome ka path
+    driver = uc.Chrome(
+        options=options, 
+        browser_executable_path='/usr/bin/google-chrome'
+    )
+    
     results = {}
-    error_log = []
-
+    
     try:
         driver.get(url)
-        wait = WebDriverWait(driver, 15)
         time.sleep(5) 
-
+        wait = WebDriverWait(driver, 10)
+        
         for pin in pincodes:
             try:
-                # 1. Input box locate karo
-                input_box = wait.until(EC.presence_of_element_located((By.ID, "pin")))
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", input_box)
-                time.sleep(1.5)
-
-                # 2. JavaScript ke through value set karo aur React event trigger karo (Bypasses UI mouse glitches)
-                driver.execute_script("""
-                    let input = arguments[0];
-                    input.focus();
-                    input.value = arguments[1];
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                """, input_box, pin)
-                
-                time.sleep(1.5) # Pincode enter hone ke baad thoda stable wait
-
-                # 3. CHECK button click via JS
-                check_btn = driver.find_element(By.XPATH, "//button[.//span[contains(text(), 'CHECK')]]")
-                driver.execute_script("arguments[0].click();", check_btn)
-                
-                # 4. Response load hone ka wait
-                time.sleep(3.5)
-
-                # 5. Extract Price
                 try:
-                    price_element = driver.find_element(By.XPATH, "//h4[contains(text(), '₹')]")
+                    change_btn = driver.find_element(By.XPATH, "//span[contains(text(), 'Change') or contains(text(), 'Enter Pincode')]")
+                    change_btn.click()
+                    time.sleep(1)
                 except:
-                    price_element = driver.find_element(By.XPATH, "(//*[contains(text(), '₹')])[1]")
+                    pass
                 
-                digits = re.findall(r'\d+', price_element.text.replace(',', ''))
+                input_box = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='text' and string-length(@value) <= 6]")))
+                input_box.clear()
+                input_box.send_keys(pin)
                 
-                if digits:
-                    results[pin] = int(digits[0])
-                else:
-                    error_log.append(f"{pin}: Price format invalid -> {price_element.text}")
-                    results[pin] = None
-
+                submit_btn = driver.find_element(By.XPATH, "//button[contains(text(), 'Check') or contains(text(), 'Submit')]")
+                submit_btn.click()
+                time.sleep(3) 
+                
+                price_element = driver.find_element(By.XPATH, "//h4[contains(text(), '₹')]")
+                price_text = price_element.text.replace('₹', '').replace(',', '').strip()
+                results[pin] = int(price_text)
+                
             except Exception as e:
-                error_log.append(f"{pin} error: {type(e).__name__}")
-                results[pin] = None
+                print(f"Pincode {pin} fetch failed: {e}")
+                results[pin] = None 
                 
     finally:
         driver.quit()
@@ -345,7 +329,7 @@ def check_pincodes_bulk(url: str, pincodes: list) -> dict:
     valid_prices = {k: v for k, v in results.items() if v is not None}
     
     if not valid_prices:
-        return {"error": f"Scraping fail ho gaya. Reason: {error_log[0] if error_log else 'Unknown error'}"}
+        return {"error": "Kisi bhi pincode ka data fetch nahi ho paya. (Shayad login required hai ya DOM structure change ho gaya)."}
 
     min_price = min(valid_prices.values())
     max_price = max(valid_prices.values())
